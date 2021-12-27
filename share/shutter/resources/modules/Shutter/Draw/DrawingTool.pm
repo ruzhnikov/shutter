@@ -61,7 +61,6 @@ use XML::Simple;
 #Glib
 use Glib qw/TRUE FALSE/;
 
-require Shutter::Utils;
 require Shutter::Draw::Utils;
 require Shutter::App::Directories;
 require Shutter::Draw::UIManager;
