@@ -1,12 +1,12 @@
 # RUNNING TESTS
 
-## INSTALL DEPENDECIES
+## INSTALL DEPENDENCIES
 
 ```bash
 # install cpanm
 cpan App::cpanminus
 
-# install dependecies from cpanfile
+# install dependencies from cpanfile
 cpanm -v --installdeps .
 ```
 
