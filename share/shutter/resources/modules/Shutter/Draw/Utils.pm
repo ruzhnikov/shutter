@@ -23,7 +23,6 @@
 package Shutter::Draw::Utils;
 
 use 5.010;
-use utf8;
 use strict;
 use warnings;
 
