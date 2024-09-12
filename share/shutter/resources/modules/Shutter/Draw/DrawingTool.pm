@@ -55,9 +55,6 @@ use File::Glob qw/ bsd_glob /;
 use File::Temp qw/ tempfile tempdir /;
 use Data::Dumper;
 
-#Sort::Naturally - sort lexically, but sort numeral parts numerically
-use Sort::Naturally;
-
 #load and save settings
 use XML::Simple;
 
@@ -4259,30 +4256,22 @@ sub show_item_properties {
 		#apply changes directly
 		$use_font->signal_connect(
 			'toggled' => sub {
-
-				$self->modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
-
+				Shutter::Draw::Utils::modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
 			});
 
 		$use_font_color->signal_connect(
 			'toggled' => sub {
-
-				$self->modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
-
+				Shutter::Draw::Utils::modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
 			});
 
 		$font_btn->signal_connect(
 			'font-set' => sub {
-
-				$self->modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
-
+				Shutter::Draw::Utils::modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
 			});
 
 		$font_color->signal_connect(
 			'color-set' => sub {
-
-				$self->modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
-
+				Shutter::Draw::Utils::modify_text_in_properties($font_btn, $textview, $font_color, $item, $use_font, $use_font_color);
 			});
 
 		#apply current font settings to button
@@ -4692,41 +4681,6 @@ sub apply_properties {
 
 	}
 
-}
-
-sub modify_text_in_properties {
-	my $self           = shift;
-	my $font_btn       = shift;
-	my $textview       = shift;
-	my $font_color     = shift;
-	my $item           = shift;
-	my $use_font       = shift;
-	my $use_font_color = shift;
-
-	my $font_descr = Pango::FontDescription->from_string($font_btn->get_font_name);
-	my $texttag    = Gtk3::TextTag->new;
-
-	if ($use_font->get_active && $use_font_color->get_active) {
-		$texttag->set('font-desc' => $font_descr, 'foreground-rgba' => $font_color->get_rgba);
-	} elsif ($use_font->get_active) {
-		$texttag->set('font-desc' => $font_descr);
-	} elsif ($use_font_color->get_active) {
-		$texttag->set('foreground-rgba' => $font_color->get_rgba);
-	}
-
-	my $texttagtable = Gtk3::TextTagTable->new;
-	$texttagtable->add($texttag);
-	my $text = Gtk3::TextBuffer->new($texttagtable);
-	$text->signal_connect(
-		'changed' => sub {
-			$text->apply_tag($texttag, $text->get_start_iter, $text->get_end_iter);
-		});
-
-	$text->set_text($textview->get_buffer->get_text($textview->get_buffer->get_start_iter, $textview->get_buffer->get_end_iter, FALSE));
-	$text->apply_tag($texttag, $text->get_start_iter, $text->get_end_iter);
-	$textview->set_buffer($text);
-
-	return TRUE;
 }
 
 sub move_all {
@@ -5818,6 +5772,7 @@ sub import_from_dnd {
 	return TRUE;
 }
 
+# TODO: consider to remove this method
 sub utf8_decode {
 	my $self   = shift;
 	my $string = shift;
@@ -5958,7 +5913,9 @@ sub import_from_filesystem {
 		my $session_menu_item = Gtk3::ImageMenuItem->new_with_label($self->{_d}->get("Import from session..."));
 		$session_menu_item->set('always_show_image' => TRUE);
 		$session_menu_item->set_image(Gtk3::Image->new_from_stock('gtk-index', 'menu'));
-		$session_menu_item->set_submenu($self->import_from_session($button));
+		$session_menu_item->set_submenu(
+			Shutter::Draw::Utils::import_from_session($button, $self->import_hash, $self->filename)
+		);
 
 		#gen thumbnails in an idle callback
 		$self->gen_thumbnail_on_idle('gtk-index', $session_menu_item, $button, TRUE, $session_menu_item->get_submenu->get_children);
@@ -6081,7 +6038,7 @@ sub import_from_utheme {
 			'activate' => sub {
 
 				$utheme_ctxt->set_image(Gtk3::Image->new_from_file($self->{_icons} . "/throbber_16x16.gif"));
-				my $context_submenu = $self->import_from_utheme_ctxt($icontheme, $context, $button);
+				my $context_submenu = Shutter::Draw::Utils::import_from_utheme_ctxt($icontheme, $context, $button);
 
 				if ($context_submenu->get_children) {
 
@@ -6112,71 +6069,6 @@ sub import_from_utheme {
 	$menu_ctxt->show_all;
 
 	return $menu_ctxt;
-}
-
-sub import_from_utheme_ctxt {
-	my $self      = shift;
-	my $icontheme = shift;
-	my $context   = shift;
-	my $button    = shift;
-
-	my $menu_ctxt_items = Gtk3::Menu->new;
-
-	my $size = Gtk3::IconSize->lookup('dialog');
-
-	foreach my $icon (sort $icontheme->list_icons($context)) {
-
-		#objects from current theme (icons for specific contexts)
-		my $utheme_ctxt_item = Gtk3::ImageMenuItem->new_with_label($icon);
-		$utheme_ctxt_item->set('always_show_image' => TRUE);
-		my $iconinfo = $icontheme->lookup_icon($icon, $size, 'generic-fallback');
-
-		#save filename and generate thumbnail later
-		#idle callback
-		$utheme_ctxt_item->{'name'} = $iconinfo->get_filename;
-
-		$menu_ctxt_items->append($utheme_ctxt_item);
-	}
-
-	$menu_ctxt_items->show_all;
-
-	return $menu_ctxt_items;
-}
-
-sub import_from_session {
-	my $self   = shift;
-	my $button = shift;
-
-	my $menu_session_objects = Gtk3::Menu->new;
-
-	my %import_hash = %{$self->{_import_hash}};
-
-	foreach my $key (Sort::Naturally::nsort(keys %import_hash)) {
-
-		next unless exists $import_hash{$key}->{'short'};
-		next unless defined $import_hash{$key}->{'short'};
-
-		#init item with filename
-		my $screen_menu_item = Gtk3::ImageMenuItem->new_with_label($import_hash{$key}->{'short'});
-		$screen_menu_item->set('always_show_image' => TRUE);
-
-		#set sensitive == FALSE if image eq current file
-		$screen_menu_item->set_sensitive(FALSE)
-			if $import_hash{$key}->{'long'} eq $self->{_filename};
-
-		#save filename and attributes
-		$screen_menu_item->{'name'}         = $import_hash{$key}->{'long'};
-		$screen_menu_item->{'mime_type'}    = $import_hash{$key}->{'mime_type'};
-		$screen_menu_item->{'mtime'}        = $import_hash{$key}->{'mtime'};
-		$screen_menu_item->{'giofile'}      = $import_hash{$key}->{'giofile'};
-		$screen_menu_item->{'no_thumbnail'} = $import_hash{$key}->{'no_thumbnail'};
-
-		$menu_session_objects->append($screen_menu_item);
-	}
-
-	$menu_session_objects->show_all;
-
-	return $menu_session_objects;
 }
 
 sub gen_thumbnail_on_idle {
@@ -7223,6 +7115,8 @@ sub uid { shift->{_uid} }
 sub increase_uid { shift->{_uid}++ }
 
 sub uimanager { shift->{_uimanager} }
+sub import_hash { shift->{_import_hash} }
+sub filename { shift->{_filename} }
 
 1;
 
